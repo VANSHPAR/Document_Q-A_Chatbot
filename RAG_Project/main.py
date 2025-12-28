@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 api_key=os.getenv("GROQ_API_KEY")
 
-
+st.set_page_config(page_title="Intelligent Document Assistant",page_icon="🤖")
 st.title("📄Document Q&A  🤖 Chatbot")
 
 llm=ChatGroq(api_key=api_key,model="llama-3.1-8b-instant")
@@ -31,9 +31,11 @@ Question:{input}
 
 """)
 
-if "messages" and "printed" not in st.session_state:
+if "messages" not in st.session_state:
     st.session_state.messages=[]
-    st.session_state.print=False
+
+if "printed" not in st.session_state:
+    st.session_state.printed=False
 
 for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
@@ -80,7 +82,7 @@ if prompt1:
         st.write(prompt1)
                 
     if "vectors" not in st.session_state:
-        st.write("⚠️ Please create the vector store first")
+        st.warning("⚠️ Please upload a PDF and create the vector store first")
                 
     else:
         retriver=st.session_state.vectors.as_retriever(search_type="similarity",search_kwargs={"k":4})
