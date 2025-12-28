@@ -80,7 +80,7 @@ if prompt1:
         st.write(prompt1)
                 
     if "vectors" not in st.session_state:
-        st.warning("⚠️ Please create the vector store first")
+        st.write("⚠️ Please create the vector store first")
                 
     else:
         retriver=st.session_state.vectors.as_retriever(search_type="similarity",search_kwargs={"k":4})
