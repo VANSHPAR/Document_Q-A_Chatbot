@@ -4,6 +4,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_classic.chains import create_retrieval_chain
+from langchain_classic.chains.combine_documents import create_stuff_documents_chain
+from langchain_classic.chains import create_history_aware_retriever
+from langchain_core.prompts import MessagesPlaceholder
+from langchain_core.messages import AIMessage,HumanMessage
 from langchain_groq import ChatGroq
 from langchain_core.runnables import RunnablePassthrough,RunnableLambda
 import pypdf
@@ -23,16 +28,37 @@ api_key=st.text_input("Enter your Groq API key:",type="password")
 if api_key:
     llm=ChatGroq(api_key=api_key,model="llama-3.1-8b-instant")
 
-    prompt=ChatPromptTemplate.from_template("""
-    Answer the following question based on the context only.
-    please provide the most accurate response based on the question.
-    <context>
-    {context}
-    </context>
-    Question:{input}
-
-
-    """)
+    
+    system_prompt=(
+    "You are an assistant for question-answering tasks. "
+    "Use the following pieces of retieved context to answer "
+    "the question. if you don't know the answer, say that you "
+    "don't know. Use three sentence maimum and keep the "
+    "answer concise."
+    "\n\n"
+    "{context}"
+    )
+    contextualize_q_system_prompt=(
+    "Given a chat history and the latest user question "
+    "which might reference context in the chat history, "
+    "formulate a standalone question which can be understood "
+    "without chat history. Do NOT answer the question, "
+    "just reformulate it if needed and otherwise return it as is."
+    )
+    contextualize_q_prompt=ChatPromptTemplate.from_messages(
+    [
+    ("system",contextualize_q_system_prompt),
+    MessagesPlaceholder("chat_history"),
+    ("human","{input}")
+    ]
+    )
+    qa_prompt=ChatPromptTemplate.from_messages(
+    [
+    ("system",system_prompt),
+    MessagesPlaceholder("chat_history"),
+    ("human","{input}")
+    ]
+    )
 
     if "messages" not in st.session_state:
         st.session_state.messages=[]
@@ -93,20 +119,15 @@ if api_key:
                 
             else:
                 retriver=st.session_state.vectors.as_retriever(search_type="similarity",search_kwargs={"k":4})
-                chain=(
-                   {
-                   "context":retriver,
-                   "input":RunnablePassthrough()
-                   }
-                   | prompt
-                   | llm
-                )
-                respose=chain.invoke(prompt1)
+                history_aware_retriever=create_history_aware_retriever(llm,retriver,contextualize_q_prompt)
+                question_answer_chain=create_stuff_documents_chain(llm,qa_prompt)
+                chain=create_retrieval_chain(history_aware_retriever,question_answer_chain)
+                respose=chain.invoke({"input":prompt1,"chat_history":st.session_state.messages})
             
                 with st.chat_message("assistant"):
                    message_placeholder=st.empty()
-                   message_placeholder.markdown(respose.content)
-                   st.session_state.messages.append({"role":"assistant","content":respose.content})
+                   message_placeholder.markdown(respose["answer"])
+                   st.session_state.messages.append({"role":"assistant","content":respose["answer"]})
         
             
 
